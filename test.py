@@ -62,7 +62,7 @@ data = data_loader.load_and_process_data()
 model = LSTM()
 
 # Initialize the loss function and optimizer
-loss_function = BCEWithLogitsLoss()
+loss_fn = BCEWithLogitsLoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
 n_epochs = 200
@@ -82,3 +82,29 @@ for epoch in range(n_epochs):
         y_pred = model(X_batch)
         train_rmse = np.sqrt(loss_fn(y_pred, y_batch))
     print("Epoch %d: train RMSE %.4f" % (epoch, train_rmse))
+
+
+
+    """ test function for data prep
+    from copy import deepcopy as dc
+
+    def prepare_dataframe_for_lstm(df, n_steps):
+        df = dc(df)
+        df.set_index('timestamp', inplace=True)
+        for i in range(1, n_steps+1):
+            df[f'voltage(t-{i})'] = df['voltage'].shift(i)
+            df[f'amperage(t-{i})'] = df['amperage'].shift(i)
+            df[f'x_pos(t-{i})'] = df['x_pos'].shift(i)
+            df[f'y_pos(t-{i})'] = df['y_pos'].shift(i)
+            df[f'x_vel(t-{i})'] = df['x_vel'].shift(i)
+        df.dropna(inplace=True)
+        return df
+
+    lookback = 7
+    shifted_df = prepare_dataframe_for_lstm(data_df, lookback)
+    shifted_df_as_np = shifted_df.to_numpy()
+
+    shifted_df_as_np
+    
+    
+    """
