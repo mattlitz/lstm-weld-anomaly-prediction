@@ -16,19 +16,21 @@ class DataLoad:
         self.scaler = MinMaxScaler()
 
     def load_and_process_data(self):
-        data = pd.concat(self.dataframes)
-        data = self.scaler.fit_transform(data.drop(['timestamp','anomaly'], axis=1))
-        sequences = self.create_sequences(data.drop(['timestamp','anomaly'], axis=1))
+        data_df = pd.concat(self.dataframes)
+        data = self.scaler.fit_transform(data_df.drop(['timestamp','anomaly'], axis=1))
+        sequences = self.create_sequences(data, data_df['anomaly'].to_numpy().astype(float))
         return DataLoader(sequences, batch_size=1, shuffle=True)
 
-    def create_sequences(self, data):
-        seq = []
+    def create_sequences(self, data, target):
+        X = []
+        y = []
         L = len(data)
         for i in range(L-self.seq_length):
             train_seq = data[i:i+self.seq_length]
-            train_label = data[i+self.seq_length, -1]
-            seq.append((train_seq ,train_label))
-        return TensorDataset(torch.Tensor(seq))
+            train_label = target[i+1:i+self.seq_length+1]
+            X.append(train_seq)
+            y.append(train_label)
+        return TensorDataset(torch.Tensor(X), torch.Tensor(y))
 
 # Step 3: Define the LSTM model
 class LSTM(nn.Module):
@@ -39,9 +41,10 @@ class LSTM(nn.Module):
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        lstm_out, _ = self.lstm(input_seq.view(len(input_seq) ,1, -1))
-        predictions = self.linear(lstm_out.view(len(input_seq), -1))
-        return predictions[-1]
+        out, _ = self.lstm(input_seq)
+        out = out[:,-1]
+        pred = self.linear(out)
+        return pred.squeeze()
 
 # Load and process the data
 
@@ -62,15 +65,20 @@ model = LSTM()
 loss_function = BCEWithLogitsLoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
-# Define the training loop
-for epoch in range(150):
-    for seq, labels in data:
+n_epochs = 200
+for epoch in range(n_epochs):
+    model.train()
+    for X_batch, y_batch in data:
+        y_pred = model(X_batch)
+        loss = loss_fn(y_pred, y_batch)
         optimizer.zero_grad()
-        model.hidden_cell = (torch.zeros(1, 1, model.hidden_layer_size),
-                        torch.zeros(1, 1, model.hidden_layer_size))
-
-        y_pred = model(seq)
-
-        single_loss = loss_function(y_pred, labels)
-        single_loss.backward()
+        loss.backward()
         optimizer.step()
+    # Validation
+    if epoch % 100 != 0:
+        continue
+    model.eval()
+    with torch.no_grad():
+        y_pred = model(X_batch)
+        train_rmse = np.sqrt(loss_fn(y_pred, y_batch))
+    print("Epoch %d: train RMSE %.4f" % (epoch, train_rmse))
