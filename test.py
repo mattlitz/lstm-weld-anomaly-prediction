@@ -3,6 +3,8 @@ from torch import nn
 from torch.optim import Adam
 from torch.nn import BCEWithLogitsLoss
 from torch.utils.data import DataLoader, TensorDataset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
 import numpy as np
@@ -16,8 +18,8 @@ class DataLoad:
         self.scaler = MinMaxScaler()
 
     def load_and_process_data(self):
-        data_df = pd.concat(self.dataframes)
-        data = self.scaler.fit_transform(data_df.drop(['timestamp','anomaly'], axis=1))
+        data_df = pd.concat(self.dataframes).sort_index(ascending=True)
+        data = self.scaler.fit_transform(data_df.drop(['anomaly'], axis=1))
         sequences = self.create_sequences(data, data_df['anomaly'].to_numpy().astype(float))
         return DataLoader(sequences, batch_size=32, shuffle=True)
 
@@ -55,7 +57,7 @@ class LSTM_Model(nn.Module):
 
 folder_path = './data'
 csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
-dataframes = [pd.read_csv(os.path.join(folder_path, f)) for f in csv_files]
+dataframes = [pd.read_csv(os.path.join(folder_path, f), index_col=0) for f in csv_files]
 seq_length = 5
 data_loader = DataLoad(dataframes, seq_length)
 data = data_loader.load_and_process_data()
@@ -65,7 +67,7 @@ model = LSTM_Model()
 
 loss_fn = BCEWithLogitsLoss()
 optimizer = Adam(model.parameters(), lr=5e-5)
-#lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=3, verbose=True)
 
 n_epochs = 100
 for epoch in range(n_epochs):
@@ -74,9 +76,8 @@ for epoch in range(n_epochs):
         y_pred = model(X_batch)
         y_batch = y_batch[:, -1].reshape(-1, 1)
         loss = loss_fn(y_pred, y_batch)
-        optimizer.zero_grad()
 
-        
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
@@ -87,6 +88,9 @@ for epoch in range(n_epochs):
     with torch.no_grad():
         y_pred = model(X_batch)
         train_rmse = np.sqrt(loss_fn(y_pred, y_batch))
+
+    #val_loss = np.mean(val_losses)
+    #scheduler.step(val_loss)
     
     print("Epoch %d: train RMSE %.4f" % (epoch, train_rmse))
 
