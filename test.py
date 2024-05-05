@@ -74,7 +74,11 @@ for epoch in range(n_epochs):
     model.train()
     for X_batch, y_batch in data:
         y_pred = model(X_batch)
+        y_pred = torch.sigmoid(y_pred)
         y_batch = y_batch[:, -1].reshape(-1, 1)
+        actual_class = torch.round(y_pred)
+        data_loader.dataframes[0]['actual_class'] = actual_class
+
         loss = loss_fn(y_pred, y_batch)
 
         optimizer.zero_grad()
@@ -92,8 +96,7 @@ for epoch in range(n_epochs):
     #val_loss = np.mean(val_losses)
     #scheduler.step(val_loss)
     
-    print("Epoch %d: train RMSE %.4f" % (epoch, train_rmse))
-
+        print("Epoch %d: train RMSE %.4f" % (epoch, train_rmse))
 
 
     """ test function for data prep

@@ -19,6 +19,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from build_data import DataLoad
 
+from tqdm import tqdm
+
 #%%
 
 class LSTM(nn.Module):
@@ -44,7 +46,7 @@ if __name__ == '__main__':
     def train(model, data, loss_function, optimizer, epochs):
         writer = SummaryWriter()
         for i in range(epochs):
-            for x, y in data:
+            for x, y in tqdm(data, desc='Training epoch {}'.format(i+1)):
                 x = torch.tensor(x, dtype=torch.float32)
                 y = torch.tensor(y, dtype=torch.float32)
                 optimizer.zero_grad()
